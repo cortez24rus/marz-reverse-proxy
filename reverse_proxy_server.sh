@@ -232,18 +232,15 @@ start_installation() {
 
 # Функция для обрезки домена (удаление http://, https:// и www)
 crop_domain() {
-    local input_value="$1"   # Считываем переданный домен или reality
-    local temp_value          # Временная переменная для обработки
-
+    local input_value="$1"
+    local temp_value
     # Удаление префиксов и www
     temp_value=$(echo "$input_value" | sed -e 's|https\?://||' -e 's|^www\.||' -e 's|/.*$||')
-
     # Проверка формата домена
     if ! [[ "$temp_value" =~ ^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$ ]]; then
         echo "Ошибка: введённый адрес '$temp_value' имеет неверный формат."
         return 1
     fi
-
     # Возвращаем обработанный домен
     echo "$temp_value"
     return 0
@@ -322,7 +319,7 @@ validate_path() {
                 ;;
             SUBPATH)
                 reading " $(text 27) " PATH_VALUE
-                ;;                                              
+                ;;                                         
         esac
 
         if [[ -z "$PATH_VALUE" ]]; then
@@ -367,15 +364,15 @@ validate_path() {
 choise_dns () {
     while true; do
         hint " $(text 31) \n" && reading " $(text 1) " CHOISE
-        case $CHOISE in
+        case $CHOISE in 
             1)
-                info " $(text 32) "
+                info " $(text 32)"
                 tilda "$(text 10)"
                 break
                 ;;
             2)
+                info " $(text 25)"
                 tilda "$(text 10)"
-                tilda "$(text 25)"
                 validate_path ADGUARDPATH
                 echo
                 break
@@ -396,20 +393,20 @@ data_entry() {
     tilda "$(text 10)"
     check_cf_token
     tilda "$(text 10)"
-#    reading " $(text 70) " SECRET_PASSWORD
-#    echo
-#    reading " $(text 19) " REALITY
-#    tilda "$(text 10)"
-#    validate_path "CDNGRPC"
-#    echo
-#    validate_path "CDNSPLIT"
-#    echo
-#    validate_path "CDNHTTPU"
-#    echo
-#    validate_path "CDNWS"
-#    echo
-#    validate_path "METRICS"
-#    tilda "$(text 10)"
+    reading " $(text 70) " SECRET_PASSWORD
+    echo
+    reading " $(text 19) " REALITY
+    tilda "$(text 10)"
+    validate_path "CDNGRPC"
+    echo
+    validate_path "CDNSPLIT"
+    echo
+    validate_path "CDNHTTPU"
+    echo
+    validate_path "CDNWS"
+    echo
+    validate_path "METRICS"
+    tilda "$(text 10)"
     choise_dns
     validate_path WEBBASEPATH
     echo
@@ -537,11 +534,11 @@ dns_encryption() {
     dns_systemd_resolved
     case $CHOISE in
         1)
-          COMMENT_AGH=""
-          tilda "$(text 10)"
-          ;;
+        COMMENT_AGH=""
+        tilda "$(text 10)"
+        ;;
         2)
-          COMMENT_AGH="location /${ADGUARDPATH}/ {
+            COMMENT_AGH="location /${ADGUARDPATH}/ {
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -552,15 +549,15 @@ dns_encryption() {
         proxy_pass http://127.0.0.1:8081/;
         break;
     }"
-          dns_adguard_home
-          dns_systemd_resolved_for_adguard
-          tilda "$(text 10)"
-          ;;
+            dns_adguard_home
+            dns_systemd_resolved_for_adguard
+            tilda "$(text 10)"
+            ;;
         *)
 
-          warning " $(text 33)"
-          dns_encryption
-          ;;
+            warning " $(text 33)"
+            dns_encryption
+            ;;
     esac
 }
 
@@ -673,12 +670,20 @@ issuance_of_certificates() {
     tilda "$(text 10)"
 }
 
+# Prometheus
+monitoring() {
+    info " $(text 66) "
+    bash <(curl -Ls https://github.com/cortez24rus/grafana-prometheus/raw/refs/heads/main/prometheus_node_exporter.sh)
+    tilda "$(text 10)"
+}
+
 ### NGINX ###
 nginx_setup() {
     info " $(text 45) "
     mkdir -p /etc/nginx/stream-enabled/
     rm -rf /etc/nginx/conf.d/default.conf
     touch /etc/nginx/.htpasswd
+    htpasswd -nb "$USERNAME" "$PASSWORD" > /etc/nginx/.htpasswd
 
     nginx_conf
     stream_conf
@@ -708,6 +713,9 @@ http {
     log_format proxy '\$proxy_protocol_addr [\$time_local] '
                         '"\$request" \$status \$body_bytes_sent '
                         '"\$http_referer" "\$http_user_agent"';
+#    log_format proxy '\$proxy_protocol_addr - \$remote_user [\$time_local] '
+#                        '"\$request" \$status \$body_bytes_sent '
+#                        '"\$http_referer" "\$http_user_agent"';
 
     access_log                    /var/log/nginx/access.log proxy;
     sendfile                      on;
@@ -748,6 +756,7 @@ stream_conf() {
 map \$ssl_preread_server_name \$backend {
     ${DOMAIN}                   web;
     www.${DOMAIN}               xtls;
+    ${REALITY}                  reality;
     default                     block;
 }
 upstream block {
@@ -755,6 +764,9 @@ upstream block {
 }
 upstream web {
     server 127.0.0.1:7443;
+}
+upstream reality {
+    server 127.0.0.1:8443;
 }
 upstream xtls {
     server 127.0.0.1:9443;
@@ -792,6 +804,9 @@ server {
     ssl_certificate_key         ${WEBKEYFILE};
     ssl_trusted_certificate     /etc/letsencrypt/live/${DOMAIN}/chain.pem;
 
+    # Diffie-Hellman parameter for DHE ciphersuites
+    ssl_dhparam                          /etc/nginx/dhparam.pem;
+
     index index.html index.htm index.php index.nginx-debian.html;
     root /var/www/html/;
 
@@ -802,7 +817,7 @@ server {
     add_header Permissions-Policy        "interest-cohort=()" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
     add_header X-Frame-Options           "SAMEORIGIN";
-    proxy_hide_header                    X-Powered-By;
+    proxy_hide_header X-Powered-By;
 
     # Security
     if (\$host !~* ^(.+\.)?${DOMAIN}\$ ){return 444;}
@@ -817,6 +832,20 @@ server {
     if (\$host = ${IP4}) {
         return 444;
     }
+
+#    location / {
+#        auth_basic "Restricted Content";
+#        auth_basic_user_file /etc/nginx/.htpasswd;
+#    }
+    location /${METRICS} {
+        auth_basic "Restricted Content";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        proxy_pass http://127.0.0.1:9100/metrics;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
     # Marz admin panel
     location ~* /(${SUBPATH}|${WEBBASEPATH}|api|docs|redoc|openapi.json|statics) {
         proxy_redirect off;
@@ -828,6 +857,42 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     }
+    # Xray Config
+    location /${CDNSPLIT} {
+        proxy_pass http://127.0.0.1:2063;
+        proxy_http_version 1.1;
+        proxy_redirect off;
+    }
+    # Xray Config
+    location ~ ^/(?<fwdport>\d+)/(?<fwdpath>.*)\$ {
+        if (\$hack = 1) {return 404;}
+        client_max_body_size 0;
+        client_body_timeout 1d;
+        grpc_read_timeout 1d;
+        grpc_socket_keepalive on;
+        proxy_read_timeout 1d;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_socket_keepalive on;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        if (\$content_type ~* "GRPC") {
+            grpc_pass grpc://127.0.0.1:\$fwdport\$is_args\$args;
+            break;
+        }
+        if (\$http_upgrade ~* "(WEBSOCKET|WS)") {
+            proxy_pass https://127.0.0.1:\$fwdport\$is_args\$args;
+            break;
+            }
+        if (\$request_method ~* ^(PUT|POST|GET)\$) {
+            proxy_pass http://127.0.0.1:\$fwdport\$is_args\$args;
+            break;
+        }
+    }
     # Adguard home
     ${COMMENT_AGH}
 }
@@ -836,7 +901,7 @@ EOF
 
 # Выбор рандомного сайта для маскировки
 random_site() {
-    bash <(curl -Ls https://raw.githubusercontent.com/cortez24rus/marz-reverse-proxy/refs/heads/main/reverse_proxy_random_site.sh)
+    bash <(curl -Ls https://github.com/cortez24rus/marz-reverse-proxy/raw/refs/heads/main/marz-rp-random-site.sh)
 }
 
 # Генерация ключей
@@ -886,7 +951,7 @@ EOF
                 REMARK="🚀 HTTPU {TIME_LEFT} {DATA_LEFT} {STATUS_EMOJI}"
                 ADDRESS="${DOMAIN}"
                 PORT="443"
-                SNI=""
+                SNI="${DOMAIN}"
                 HOST="${DOMAIN}"
                 SECURITY="inbound_default"
                 FINGERPRINT="random"
@@ -990,11 +1055,10 @@ panel_installation() {
 
     # Установка и остановка Marzban
     timeout 110 bash -c "$(curl -sL https://github.com/Gozargah/Marzban-scripts/raw/master/marzban.sh)" @ install
-    echo -e '\n\n' | bash <(curl -fsSL git.new/install)
     read PRIVATE_KEY0 PUBLIC_KEY0 <<< "$(generate_keys)"
     read PRIVATE_KEY1 PUBLIC_KEY1 <<< "$(generate_keys)"
     marzban down
-
+    
     # Редактирование docker-compose.yml
     cat >> /opt/marzban/docker-compose.yml <<EOF
       - /etc/letsencrypt/live/$DOMAIN/fullchain.pem:/var/lib/marzban/certs/fullchain.pem
@@ -1016,14 +1080,20 @@ EOF
         /opt/marzban/.env
 
     # Скачивание и распаковка xray конфига
-    while ! wget -q --progress=dot:mega --timeout=30 --tries=10 --retry-connrefused https://raw.githubusercontent.com/cortez24rus/marz-reverse-proxy/refs/heads/main/config/xray_config.json; do
+    while ! wget -q --progress=dot:mega --timeout=30 --tries=10 --retry-connrefused https://raw.githubusercontent.com/cortez24rus/marz-reverse-proxy/refs/heads/main/config/xray_config.gpg; do
         warning " $(text 38) "
         sleep 3
     done
+    echo ${SECRET_PASSWORD} | gpg --batch --yes --passphrase-fd 0 -d xray_config.gpg > xray_config.json
     
     # Выполняем замены
     sed -i \
         -e "s|TEMP_DOMAIN|$DOMAIN|g" \
+        -e "s|TEMP_PATHGRPC|$CDNGRPC|g" \
+        -e "s|TEMP_PATHSPLIT|$CDNSPLIT|g" \
+        -e "s|TEMP_PATHHTTPU|$CDNHTTPU|g" \
+        -e "s|TEMP_PATHWS|$CDNWS|g" \
+        -e "s|TEMP_REALITY|$REALITY|g" \
         -e "s|TEMP_PRIVATEKEY0|$PRIVATE_KEY0|g" \
         -e "s|TEMP_PRIVATEKEY1|$PRIVATE_KEY1|g" \
         xray_config.json
@@ -1040,7 +1110,7 @@ EOF
         warning " $(text 38) "
         sleep 3
     done
-    
+
     rm -rf /var/lib/marzban/db.sqlite3.*
     mv /var/lib/marzban/db.sqlite3 /var/lib/marzban/db.sqlite3.back
     mv db.sqlite3 /var/lib/marzban/
@@ -1049,10 +1119,10 @@ EOF
     update_hosts
 
     # Настройка дизайна подписки
-    sudo wget -N -P /var/lib/marzban/templates/subscription/ https://raw.githubusercontent.com/cortez24rus/marz-sub/refs/heads/main/index.html
+    sudo wget -N -P /var/lib/marzban/templates/subscription/  https://raw.githubusercontent.com/cortez24rus/marz-sub/refs/heads/main/index.html
     systemctl stop torrent-blocker
     systemctl start torrent-blocker
-    timeout 7 marzban up
+    timeout 5 marzban up
 
     tilda "$(text 10)"
 }
@@ -1061,6 +1131,7 @@ EOF
 enabling_security() {
     info " $(text 47) "
     ufw --force reset
+    ufw allow 36079/tcp
     ufw allow 443/tcp
     ufw allow 22/tcp
     ufw insert 1 deny from $(echo ${IP4} | cut -d '.' -f 1-3).0/22
@@ -1100,6 +1171,8 @@ ssh_setup() {
         done
         # Если ключ найден, продолжаем настройку SSH
         sed -i -e "
+            s/#Port/Port/g;
+            s/Port 22/Port 36079/g;
             s/#PermitRootLogin/PermitRootLogin/g;
             s/PermitRootLogin yes/PermitRootLogin prohibit-password/g;
             s/#PubkeyAuthentication/PubkeyAuthentication/g;
@@ -1109,7 +1182,7 @@ ssh_setup() {
             s/#PermitEmptyPasswords/PermitEmptyPasswords/g;
             s/PermitEmptyPasswords yes/PermitEmptyPasswords no/g;
         " /etc/ssh/sshd_config
-
+        
         # Настройка баннера
         cat > /etc/motd <<EOF
 
@@ -1165,7 +1238,7 @@ data_output() {
         out_data " $(text 61) " "https://${DOMAIN}/${ADGUARDPATH}/login.html"
     fi
     echo
-    out_data " $(text 62) " "ssh -p 22 ${USERNAME}@${IP4}"
+    out_data " $(text 62) " "ssh -p 36079 ${USERNAME}@${IP4}"
     echo
     out_data " $(text 63) " "$USERNAME"
     out_data " $(text 64) " "$PASSWORD"
@@ -1195,6 +1268,7 @@ main_script_first() {
     disable_ipv6
     warp
     issuance_of_certificates
+    monitoring
     nginx_setup
     panel_installation
     enabling_security
